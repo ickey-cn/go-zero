@@ -97,6 +97,30 @@ d = "abcd!@#$112"
 	assert.Equal(t, "abcd!@#$112", val.D)
 }
 
+func TestConfigOptional(t *testing.T) {
+	text := `a = "foo"
+b = 1
+c = "FOO"
+d = "abcd"
+`
+	tmpfile, err := createTempFile(".toml", text)
+	assert.Nil(t, err)
+	defer os.Remove(tmpfile)
+
+	var val struct {
+		A string `json:"a"`
+		B int    `json:"b,optional"`
+		C string `json:"c,optional=B"`
+		D string `json:"d,optional=b"`
+	}
+	if assert.NoError(t, Load(tmpfile, &val)) {
+		assert.Equal(t, "foo", val.A)
+		assert.Equal(t, 1, val.B)
+		assert.Equal(t, "FOO", val.C)
+		assert.Equal(t, "abcd", val.D)
+	}
+}
+
 func TestConfigJsonCanonical(t *testing.T) {
 	text := []byte(`{"a": "foo", "B": "bar"}`)
 
@@ -237,23 +261,23 @@ func TestToCamelCase(t *testing.T) {
 		},
 		{
 			input:  "hello_world",
-			expect: "helloWorld",
+			expect: "hello_world",
 		},
 		{
 			input:  "Hello_world",
-			expect: "helloWorld",
+			expect: "hello_world",
 		},
 		{
 			input:  "hello_World",
-			expect: "helloWorld",
+			expect: "hello_world",
 		},
 		{
 			input:  "helloWorld",
-			expect: "helloWorld",
+			expect: "helloworld",
 		},
 		{
 			input:  "HelloWorld",
-			expect: "helloWorld",
+			expect: "helloworld",
 		},
 		{
 			input:  "hello World",
@@ -269,34 +293,34 @@ func TestToCamelCase(t *testing.T) {
 		},
 		{
 			input:  "Hello World foo_bar",
-			expect: "hello world fooBar",
+			expect: "hello world foo_bar",
 		},
 		{
 			input:  "Hello World foo_Bar",
-			expect: "hello world fooBar",
+			expect: "hello world foo_bar",
 		},
 		{
 			input:  "Hello World Foo_bar",
-			expect: "hello world fooBar",
+			expect: "hello world foo_bar",
 		},
 		{
 			input:  "Hello World Foo_Bar",
-			expect: "hello world fooBar",
+			expect: "hello world foo_bar",
 		},
 		{
 			input:  "Hello.World Foo_Bar",
-			expect: "hello.world fooBar",
+			expect: "hello.world foo_bar",
 		},
 		{
 			input:  "你好 World Foo_Bar",
-			expect: "你好 world fooBar",
+			expect: "你好 world foo_bar",
 		},
 	}
 
 	for _, test := range tests {
 		test := test
 		t.Run(test.input, func(t *testing.T) {
-			assert.Equal(t, test.expect, toCamelCase(test.input))
+			assert.Equal(t, test.expect, toLowerCase(test.input))
 		})
 	}
 }
@@ -332,6 +356,22 @@ func TestLoadFromYamlBytes(t *testing.T) {
 	assert.Equal(t, "foo", val.Layer1.Layer2.Layer3)
 }
 
+func TestLoadFromYamlBytesTerm(t *testing.T) {
+	input := []byte(`layer1:
+  layer2:
+    tls_conf: foo`)
+	var val struct {
+		Layer1 struct {
+			Layer2 struct {
+				Layer3 string `json:"tls_conf"`
+			}
+		}
+	}
+
+	assert.NoError(t, LoadFromYamlBytes(input, &val))
+	assert.Equal(t, "foo", val.Layer1.Layer2.Layer3)
+}
+
 func TestLoadFromYamlBytesLayers(t *testing.T) {
 	input := []byte(`layer1:
   layer2:
@@ -342,6 +382,78 @@ func TestLoadFromYamlBytesLayers(t *testing.T) {
 
 	assert.NoError(t, LoadFromYamlBytes(input, &val))
 	assert.Equal(t, "foo", val.Value)
+}
+
+func TestLoadFromYamlItemOverlay(t *testing.T) {
+	type (
+		Redis struct {
+			Host string
+			Port int
+		}
+
+		RedisKey struct {
+			Redis
+			Key string
+		}
+
+		Server struct {
+			Redis RedisKey
+		}
+
+		TestConfig struct {
+			Server
+			Redis Redis
+		}
+	)
+
+	input := []byte(`Redis:
+  Host: localhost
+  Port: 6379
+  Key: test
+`)
+
+	var c TestConfig
+	if assert.NoError(t, LoadFromYamlBytes(input, &c)) {
+		assert.Equal(t, "localhost", c.Redis.Host)
+		assert.Equal(t, 6379, c.Redis.Port)
+		assert.Equal(t, "test", c.Server.Redis.Key)
+	}
+}
+
+func TestLoadFromYamlItemOverlayWithMap(t *testing.T) {
+	type (
+		Redis struct {
+			Host string
+			Port int
+		}
+
+		RedisKey struct {
+			Redis
+			Key string
+		}
+
+		Server struct {
+			Redis RedisKey
+		}
+
+		TestConfig struct {
+			Server
+			Redis map[string]interface{}
+		}
+	)
+
+	input := []byte(`Redis:
+  Host: localhost
+  Port: 6379
+  Key: test
+`)
+
+	var c TestConfig
+	if assert.NoError(t, LoadFromYamlBytes(input, &c)) {
+		assert.Equal(t, "localhost", c.Server.Redis.Host)
+		assert.Equal(t, 6379, c.Server.Redis.Port)
+		assert.Equal(t, "test", c.Server.Redis.Key)
+	}
 }
 
 func TestUnmarshalJsonBytesMap(t *testing.T) {
