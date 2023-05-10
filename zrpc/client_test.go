@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zeromicro/go-zero/core/discov"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/zrpc/internal/mock"
+	"github.com/zeromicro/go-zero/internal/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -113,10 +113,11 @@ func TestDepositServer_Deposit(t *testing.T) {
 	)
 	tarConfClient := MustNewClient(
 		RpcClientConf{
-			Target:  "foo",
-			App:     "foo",
-			Token:   "bar",
-			Timeout: 1000,
+			Target:        "foo",
+			App:           "foo",
+			Token:         "bar",
+			Timeout:       1000,
+			KeepaliveTime: time.Second * 15,
 			Middlewares: ClientMiddlewaresConf{
 				Trace:      true,
 				Duration:   true,

@@ -197,7 +197,12 @@ func Must(err error) {
 	msg := err.Error()
 	log.Print(msg)
 	getWriter().Severe(msg)
-	os.Exit(1)
+
+	if ExitOnFatal.True() {
+		os.Exit(1)
+	} else {
+		panic(msg)
+	}
 }
 
 // MustSetup sets up logging with given config c. It exits on error.
@@ -353,14 +358,16 @@ func createOutput(path string) (io.WriteCloser, error) {
 		return nil, ErrLogPathNotSet
 	}
 
+	var rule RotateRule
 	switch options.rotationRule {
 	case sizeRotationRule:
-		return NewLogger(path, NewSizeLimitRotateRule(path, backupFileDelimiter, options.keepDays,
-			options.maxSize, options.maxBackups, options.gzipEnabled), options.gzipEnabled)
+		rule = NewSizeLimitRotateRule(path, backupFileDelimiter, options.keepDays, options.maxSize,
+			options.maxBackups, options.gzipEnabled)
 	default:
-		return NewLogger(path, DefaultRotateRule(path, backupFileDelimiter, options.keepDays,
-			options.gzipEnabled), options.gzipEnabled)
+		rule = DefaultRotateRule(path, backupFileDelimiter, options.keepDays, options.gzipEnabled)
 	}
+
+	return NewLogger(path, rule, options.gzipEnabled)
 }
 
 func getWriter() Writer {

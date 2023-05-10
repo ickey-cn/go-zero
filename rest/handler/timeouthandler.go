@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"path"
 	"runtime"
@@ -29,14 +31,14 @@ const (
 // Notice: even if canceled in server side, 499 will be logged as well.
 func TimeoutHandler(duration time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		if duration > 0 {
-			return &timeoutHandler{
-				handler: next,
-				dt:      duration,
-			}
+		if duration <= 0 {
+			return next
 		}
 
-		return next
+		return &timeoutHandler{
+			handler: next,
+			dt:      duration,
+		}
 	}
 }
 
@@ -125,6 +127,20 @@ type timeoutWriter struct {
 
 var _ http.Pusher = (*timeoutWriter)(nil)
 
+func (tw *timeoutWriter) Flush() {
+	if flusher, ok := tw.w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func (tw *timeoutWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if hijacked, ok := tw.w.(http.Hijacker); ok {
+		return hijacked.Hijack()
+	}
+
+	return nil, nil, errors.New("server doesn't support hijacking")
+}
+
 // Header returns the underline temporary http.Header.
 func (tw *timeoutWriter) Header() http.Header { return tw.h }
 
@@ -173,7 +189,10 @@ func (tw *timeoutWriter) writeHeaderLocked(code int) {
 func (tw *timeoutWriter) WriteHeader(code int) {
 	tw.mu.Lock()
 	defer tw.mu.Unlock()
-	tw.writeHeaderLocked(code)
+
+	if !tw.wroteHeader {
+		tw.writeHeaderLocked(code)
+	}
 }
 
 func checkWriteHeaderCode(code int) {
@@ -194,9 +213,11 @@ func relevantCaller() runtime.Frame {
 		if !strings.HasPrefix(frame.Function, "net/http.") {
 			return frame
 		}
+
 		if !more {
 			break
 		}
 	}
+
 	return frame
 }

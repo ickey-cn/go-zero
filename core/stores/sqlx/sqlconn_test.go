@@ -8,6 +8,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/trace/tracetest"
 )
 
 const mockedDatasource = "sqlmock"
@@ -17,6 +18,7 @@ func init() {
 }
 
 func TestSqlConn(t *testing.T) {
+	me := tracetest.NewInMemoryExporter(t)
 	mock, err := buildConn()
 	assert.Nil(t, err)
 	mock.ExpectExec("any")
@@ -49,17 +51,15 @@ func TestSqlConn(t *testing.T) {
 	assert.NotNil(t, badConn.Transact(func(session Session) error {
 		return nil
 	}))
+	assert.Equal(t, 14, len(me.GetSpans()))
 }
 
 func buildConn() (mock sqlmock.Sqlmock, err error) {
-	_, err = connManager.GetResource(mockedDatasource, func() (io.Closer, error) {
+	connManager.GetResource(mockedDatasource, func() (io.Closer, error) {
 		var db *sql.DB
 		var err error
 		db, mock, err = sqlmock.New()
-		return &pingedDB{
-			DB: db,
-		}, err
+		return db, err
 	})
-
 	return
 }

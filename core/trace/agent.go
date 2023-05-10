@@ -3,6 +3,7 @@ package trace
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"sync"
 
 	"github.com/zeromicro/go-zero/core/lang"
@@ -57,6 +58,10 @@ func createExporter(c Config) (sdktrace.SpanExporter, error) {
 	// Just support jaeger and zipkin now, more for later
 	switch c.Batcher {
 	case kindJaeger:
+		u, _ := url.Parse(c.Endpoint)
+		if u.Scheme == "udp" {
+			return jaeger.New(jaeger.WithAgentEndpoint(jaeger.WithAgentHost(u.Hostname()), jaeger.WithAgentPort(u.Port())))
+		}
 		return jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(c.Endpoint)))
 	case kindZipkin:
 		return zipkin.New(c.Endpoint)
@@ -66,17 +71,29 @@ func createExporter(c Config) (sdktrace.SpanExporter, error) {
 		// endpoint can not reach.
 		// If the connection not dial success, the global otel ErrorHandler will catch error
 		// when reporting data like other exporters.
-		return otlptracegrpc.New(
-			context.Background(),
+		opts := []otlptracegrpc.Option{
 			otlptracegrpc.WithInsecure(),
 			otlptracegrpc.WithEndpoint(c.Endpoint),
+		}
+		if len(c.OtlpHeaders) > 0 {
+			opts = append(opts, otlptracegrpc.WithHeaders(c.OtlpHeaders))
+		}
+		return otlptracegrpc.New(
+			context.Background(),
+			opts...,
 		)
 	case kindOtlpHttp:
 		// Not support flexible configuration now.
-		return otlptracehttp.New(
-			context.Background(),
+		opts := []otlptracehttp.Option{
 			otlptracehttp.WithInsecure(),
 			otlptracehttp.WithEndpoint(c.Endpoint),
+		}
+		if len(c.OtlpHeaders) > 0 {
+			opts = append(opts, otlptracehttp.WithHeaders(c.OtlpHeaders))
+		}
+		return otlptracehttp.New(
+			context.Background(),
+			opts...,
 		)
 	default:
 		return nil, fmt.Errorf("unknown exporter: %s", c.Batcher)
