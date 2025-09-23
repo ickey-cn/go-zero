@@ -175,6 +175,20 @@ func TestHandleRequest_badRequest(t *testing.T) {
 		mock.server.handleRequest(w, r)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 	})
+
+	t.Run("bad id", func(t *testing.T) {
+		mock := newMockMcpServer(t)
+		defer mock.shutdown()
+
+		addTestClient(mock.server, "test-session", true)
+
+		body := `{"jsonrpc": "2.0", "id": {}, "method": "tools.call", "params": {}}`
+		r := httptest.NewRequest(http.MethodPost, "/?session_id=test-session", bytes.NewReader([]byte(body)))
+		w := httptest.NewRecorder()
+		mock.server.handleRequest(w, r)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "Invalid request.ID")
+	})
 }
 
 func TestRegisterTool(t *testing.T) {
@@ -1727,7 +1741,7 @@ func TestHandleSSEPing(t *testing.T) {
 	mock.server.clientsLock.Unlock()
 
 	assert.Equal(t, 1, clientCount, "One client should be added during the test")
-	assert.Equal(t, 0, finalClientCount, "Client should be cleaned up after context cancelation")
+	assert.Equal(t, 0, finalClientCount, "Client should be cleaned up after context cancellation")
 }
 
 // TestHandleSSEPing tests the automatic ping functionality in the SSE handler

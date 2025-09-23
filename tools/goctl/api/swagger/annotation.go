@@ -7,15 +7,6 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-func hasKey(properties map[string]string, key string) bool {
-	if len(properties) == 0 {
-		return false
-	}
-	md := metadata.New(properties)
-	_, ok := md[key]
-	return ok
-}
-
 func getBoolFromKVOrDefault(properties map[string]string, key string, def bool) bool {
 	if len(properties) == 0 {
 		return def
@@ -25,8 +16,10 @@ func getBoolFromKVOrDefault(properties map[string]string, key string, def bool) 
 	if len(val) == 0 {
 		return def
 	}
-	str := util.Unquote(val[0])
-	if len(str) == 0 {
+	//I think this function and those below should handle error, but they didn't.
+	//Since a default value (def) is provided, any parsing errors will result in the default being returned.
+	str, err := strconv.Unquote(val[0])
+	if err != nil || len(str) == 0 {
 		return def
 	}
 	res, _ := strconv.ParseBool(str)
@@ -42,8 +35,8 @@ func getStringFromKVOrDefault(properties map[string]string, key string, def stri
 	if len(val) == 0 {
 		return def
 	}
-	str := util.Unquote(val[0])
-	if len(str) == 0 {
+	str, err := strconv.Unquote(val[0])
+	if err != nil || len(str) == 0 {
 		return def
 	}
 	return str
@@ -59,8 +52,8 @@ func getListFromInfoOrDefault(properties map[string]string, key string, def []st
 		return def
 	}
 
-	str := util.Unquote(val[0])
-	if len(str) == 0 {
+	str, err := strconv.Unquote(val[0])
+	if err != nil || len(str) == 0 {
 		return def
 	}
 	resp := util.FieldsAndTrimSpace(str, commaRune)
@@ -75,8 +68,8 @@ func getFirstUsableString(def ...string) string {
 		return ""
 	}
 	for _, val := range def {
-		str := util.Unquote(val)
-		if len(str) != 0 {
+		str, err := strconv.Unquote(val)
+		if err == nil && len(str) != 0 {
 			return str
 		}
 	}

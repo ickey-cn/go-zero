@@ -92,6 +92,15 @@ func ValidatePtr(v reflect.Value) error {
 	return nil
 }
 
+func convertToString(val any, fullName string) (string, error) {
+	v, ok := val.(string)
+	if !ok {
+		return "", fmt.Errorf("expect string for field %s, but got type %T", fullName, val)
+	}
+
+	return v, nil
+}
+
 func convertTypeFromString(kind reflect.Kind, str string) (any, error) {
 	switch kind {
 	case reflect.Bool:
@@ -572,6 +581,10 @@ func toFloat64(v any) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func toReflectValue(tp reflect.Type, v any) reflect.Value {
+	return reflect.ValueOf(v).Convert(Deref(tp))
 }
 
 func usingDifferentKeys(key string, field reflect.StructField) bool {
